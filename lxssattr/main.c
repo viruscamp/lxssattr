@@ -188,6 +188,10 @@ int __cdecl _tmain()
     LXSS_FILE_INFO srcinfo = LxssFileInfo();
     LXSS_FILE_INFO targetinfo = LxssFileInfo();
 
+    CHAR* link_name_buf = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, MAXIMUM_REPARSE_DATA_BUFFER_SIZE + 1);
+    DWORD link_num_buf_length = MAXIMUM_REPARSE_DATA_BUFFER_SIZE;
+    CHAR* link_name = NULL; // UTF8 '\0' terminted
+
     _tprintf(_T("Querying: %s\n\n"), __targv[1]);
     srcinfo = OpenLxssFileInfo(__targv[1]);
     if (srcinfo.fileHandle == NULL)
@@ -198,38 +202,12 @@ int __cdecl _tmain()
 
     if (srcinfo.reparseTag != 0)
     {
-        PSTR tag_type = NULL;
-        switch (srcinfo.reparseTag) {
-        case IO_REPARSE_TAG_LX_SYMLINK: tag_type = "SYMLINK"; break;
-        case IO_REPARSE_TAG_LX_FIFO: tag_type = "FIFO"; break;
-        case IO_REPARSE_TAG_LX_CHR: tag_type = "CHR"; break;
-        case IO_REPARSE_TAG_LX_BLK: tag_type = "BLK"; break;
-        case IO_REPARSE_TAG_AF_UNIX: tag_type = "AF_UNIX"; break;
-        }
-        _tprintf(_T("WslFS reparse point:       %S\n"), tag_type);
+        PrintReparseTag(srcinfo.reparseTag);
     }
-
-    CHAR link_name_buf[MAXIMUM_REPARSE_DATA_BUFFER_SIZE + 1];
-    CHAR* link_name = NULL; // UTF8 '\0' terminted
 
     if (srcinfo.reparseTag == IO_REPARSE_TAG_LX_SYMLINK)
     {
-        ULONG junk = 0;
-        if (!DeviceIoControl(srcinfo.fileHandle, FSCTL_GET_REPARSE_POINT, NULL, 0, link_name_buf, MAXIMUM_REPARSE_DATA_BUFFER_SIZE, &junk, NULL))
-        {
-            DWORD errorno = GetLastError();
-            _tprintf(_T("[ERROR] DeviceIoControl: 0x%x, Cannot read symlink from reparse_point data\n"), errorno);
-        }
-        else
-        {
-            PREPARSE_GUID_DATA_BUFFER reparse_buf = (PREPARSE_GUID_DATA_BUFFER)link_name_buf;
-            CHAR* reparse_data = (CHAR*)&reparse_buf->ReparseGuid;
-            if (reparse_buf->ReparseDataLength > 4)
-            {
-                reparse_data[reparse_buf->ReparseDataLength] = '\0';
-                link_name = reparse_data + 4;
-            }
-        }
+        ReadLxSymlink(srcinfo.fileHandle, link_name_buf, link_num_buf_length, &link_name);
     }
 
     PFILE_FULL_EA_INFORMATION pEaLxattrb = NULL;
@@ -244,17 +222,7 @@ int __cdecl _tmain()
             char filetype = PrintLxattrb(eaInfo);
             if (filetype == 'l')
             {
-                DWORD read_size = 0;
-                if (!ReadFile(srcinfo.fileHandle, link_name_buf, MAXIMUM_REPARSE_DATA_BUFFER_SIZE, &read_size, NULL))
-                {
-                    DWORD errorno = GetLastError();
-                    _tprintf(_T("[ERROR] ReadFile: 0x%x, Cannot read symlink from file content\n"), errorno);
-                }
-                else
-                {
-                    link_name_buf[read_size] = '\0';
-                    link_name = link_name_buf;
-                }
+                ReadTextSymlink(srcinfo.fileHandle, link_name_buf, link_num_buf_length, &link_name);
             }
         }
         else if (_stricmp(NTFS_EX_ATTR_LXUID, eaInfo->EaName) == 0)
@@ -348,7 +316,7 @@ int __cdecl _tmain()
     }
 
 CleanupExit:
-
+    HeapFree(GetProcessHeap(), 0, link_name_buf);
     CloseLxssFileInfo(&srcinfo);
     CloseLxssFileInfo(&targetinfo);
 

@@ -20,3 +20,7 @@ void PrintLxuid(PFILE_FULL_EA_INFORMATION buffer);
 void PrintLxgid(PFILE_FULL_EA_INFORMATION buffer);
 void PrintLxmod(PFILE_FULL_EA_INFORMATION buffer);
 void PrintLxdev(PFILE_FULL_EA_INFORMATION buffer);
+
+void PrintReparseTag(ULONG reparseTag);
+
+NTSTATUS ReadLxSymlink(HANDLE fileHandle, CHAR* buf, DWORD bufSize, CHAR** linkName);

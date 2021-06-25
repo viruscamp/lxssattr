@@ -42,3 +42,44 @@ void PrintLxdev(PFILE_FULL_EA_INFORMATION buffer)
         NTFS_EX_ATTR_LXDEV, type_major, type_minor
     );
 }
+
+void PrintReparseTag(ULONG reparseTag)
+{
+    PSTR tag_type = NULL;
+    switch (reparseTag) {
+    case IO_REPARSE_TAG_LX_SYMLINK: tag_type = "SYMLINK"; break;
+    case IO_REPARSE_TAG_LX_FIFO: tag_type = "FIFO"; break;
+    case IO_REPARSE_TAG_LX_CHR: tag_type = "CHR"; break;
+    case IO_REPARSE_TAG_LX_BLK: tag_type = "BLK"; break;
+    case IO_REPARSE_TAG_AF_UNIX: tag_type = "AF_UNIX"; break;
+    default: tag_type = "UNKNOWN"; break;
+    }
+    _tprintf(_T("WslFS reparse point:       %S\n"), tag_type);
+}
+
+
+NTSTATUS ReadLxSymlink(HANDLE fileHandle, CHAR* buf, DWORD bufSize, CHAR** linkName)
+{
+    ULONG junk = 0;
+    if (!DeviceIoControl(fileHandle, FSCTL_GET_REPARSE_POINT, NULL, 0, buf, bufSize, &junk, NULL))
+    {
+        DWORD errorno = GetLastError();
+        _tprintf(_T("[ERROR] DeviceIoControl: 0x%x, Cannot read symlink from reparse_point data\n"), errorno);
+        return errorno;
+    }
+
+    PREPARSE_GUID_DATA_BUFFER reparse_buf = (PREPARSE_GUID_DATA_BUFFER)buf;
+    CHAR* reparse_data = (CHAR*)&reparse_buf->ReparseGuid;
+    if (reparse_buf->ReparseDataLength > 4 && reparse_buf->ReparseGuid.Data1 == 0x02)
+    {
+        reparse_data[reparse_buf->ReparseDataLength] = '\0';
+        *linkName = reparse_data + 4;
+    }
+    else
+    {
+        _tprintf(_T("[ERROR] Invalid reparse_point data, Cannot read symlink from reparse_point data\n"));
+        return -1;
+    }
+
+    return 0;
+}

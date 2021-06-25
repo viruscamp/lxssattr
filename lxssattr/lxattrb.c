@@ -41,3 +41,18 @@ char PrintLxattrb(PFILE_FULL_EA_INFORMATION buffer)
 
     return filetype;
 }
+
+NTSTATUS ReadTextSymlink(HANDLE fileHandle, CHAR* buf, DWORD bufSize, CHAR** linkName)
+{
+    DWORD read_size = 0;
+    if (!ReadFile(fileHandle, buf, bufSize, &read_size, NULL))
+    {
+        DWORD errorno = GetLastError();
+        _tprintf(_T("[ERROR] ReadFile: 0x%x, Cannot read symlink from file content\n"), errorno);
+        return errorno;
+    }
+
+    buf[read_size] = '\0';
+    *linkName = buf;
+    return 0;
+}
